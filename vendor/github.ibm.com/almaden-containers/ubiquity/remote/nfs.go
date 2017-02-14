@@ -161,6 +161,11 @@ func (s *nfsRemoteClient) Attach(name string) (string, error) {
 		return "", err
 	}
 
+	if s.isMounted(nfsShare, remoteMountpoint) {
+		s.logger.Printf("nfsRemoteClient: - mount: %s is already mounted at %s\n", nfsShare, remoteMountpoint)
+		return remoteMountpoint, nil
+	}
+
 	s.logger.Printf("nfsRemoteClient: mkdir -p %s\n", remoteMountpoint)
 	args := []string{"mkdir", "-p", remoteMountpoint}
 
@@ -260,10 +265,6 @@ func (s *nfsRemoteClient) mount(nfsShare, remoteMountpoint string) (string, erro
 	s.logger.Printf("nfsRemoteClient: - mount start nfsShare=%s\n", nfsShare)
 	defer s.logger.Printf("nfsRemoteClient: - mount end nfsShare=%s\n", nfsShare)
 
-	if s.isMounted(nfsShare, remoteMountpoint) {
-		s.logger.Printf("nfsRemoteClient: - mount: %s is already mounted at %s\n", nfsShare, remoteMountpoint)
-		return remoteMountpoint, nil
-	}
 	executor := utils.NewExecutor(s.logger)
 	args := []string{"mount", "-t", "nfs", nfsShare, remoteMountpoint}
 	output, err := executor.Execute("sudo", args)
