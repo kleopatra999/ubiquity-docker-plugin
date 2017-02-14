@@ -153,11 +153,39 @@ func (s *nfsRemoteClient) Attach(name string) (string, error) {
 	}
 
 	nfsShare := mountResponse.Mountpoint
-
 	// FIXME: What is our local mount path? Should we be getting this from the volume config? Using same path as on ubiquity server below /mnt/ for now.
 	remoteMountpoint := path.Join("/mnt/", strings.Split(nfsShare, ":")[1])
 
-	return s.mount(nfsShare, remoteMountpoint)
+	returnMountPoint, err := s.mount(nfsShare, remoteMountpoint)
+	_, volumeConfig, err := s.GetVolume(name)
+	if err != nil {
+		return "", err
+	}
+
+	isPreexisting, isPreexistingSpecified := volumeConfig["isPreexisting"]
+	if isPreexistingSpecified && isPreexisting.(bool) == false {
+		uid, uidSpecified := volumeConfig["uid"]
+		gid, gidSpecified := volumeConfig["gid"]
+		executor := utils.NewExecutor(s.logger)
+		if uidSpecified || gidSpecified {
+			args := []string{"chown", fmt.Sprintf("%s:%s", uid, gid), returnMountPoint}
+			_, err = executor.Execute("sudo", args)
+			if err != nil {
+				s.logger.Printf("Failed to change permissions of mountpoint %s: %s", mountResponse.Mountpoint, err.Error())
+				return "", err
+			}
+		} else {
+			//chmod 777 mountpoint
+			args := []string{"chmod", "777", returnMountPoint}
+			_, err = executor.Execute("sudo", args)
+			if err != nil {
+				s.logger.Printf("Failed to change permissions of mountpoint %s: %s", mountResponse.Mountpoint, err.Error())
+				return "", err
+			}
+		}
+	}
+
+	return returnMountPoint, err
 }
 
 func (s *nfsRemoteClient) Detach(name string) error {
@@ -231,28 +259,16 @@ func (s *nfsRemoteClient) mount(nfsShare, remoteMountpoint string) (string, erro
 	}
 
 	s.logger.Printf("nfsRemoteClient: mkdir -p %s\n", remoteMountpoint)
-	command := "mkdir"
-	args := []string{"-p", remoteMountpoint}
-	cmd := exec.Command(command, args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("nfsRemoteClient: Failed to mkdir for remote mountpoint %s (share %s, error '%s', output '%s')\n", remoteMountpoint, nfsShare, err.Error(), output)
-	}
-	s.logger.Printf("nfsRemoteClient: mkdir output: %s\n", string(output))
+	args := []string{"mkdir", "-p", remoteMountpoint}
 
-	//hack for now
-	command = "chmod"
-	args = []string{"-R", "777", remoteMountpoint}
-	cmd = exec.Command(command, args...)
-	output, err = cmd.Output()
+	executor := utils.NewExecutor(s.logger)
+	_, err := executor.Execute("sudo", args)
 	if err != nil {
-		s.logger.Printf("nfsRemoteClient: Non-fatal error: Failed to set permissions for share (error '%s', output '%s')\n", err.Error(), output)
+		return "", fmt.Errorf("nfsRemoteClient: Failed to mkdir for remote mountpoint %s (share %s, error '%s')\n", remoteMountpoint, nfsShare, err.Error())
 	}
 
-	command = "mount"
-	args = []string{"-t", "nfs", nfsShare, remoteMountpoint}
-	cmd = exec.Command(command, args...)
-	output, err = cmd.Output()
+	args = []string{"mount", "-t", "nfs", nfsShare, remoteMountpoint}
+	output, err := executor.Execute("sudo", args)
 	if err != nil {
 		return "", fmt.Errorf("nfsRemoteClient: Failed to mount share %s to remote mountpoint %s (error '%s', output '%s')\n", nfsShare, remoteMountpoint, err.Error(), output)
 	}
