@@ -161,6 +161,15 @@ func (s *nfsRemoteClient) Attach(name string) (string, error) {
 		return "", err
 	}
 
+	s.logger.Printf("nfsRemoteClient: mkdir -p %s\n", remoteMountpoint)
+	args := []string{"mkdir", "-p", remoteMountpoint}
+
+	executor := utils.NewExecutor(s.logger)
+	_, err = executor.Execute("sudo", args)
+	if err != nil {
+		return "", fmt.Errorf("nfsRemoteClient: Failed to mkdir for remote mountpoint %s (share %s, error '%s')\n", remoteMountpoint, nfsShare, err.Error())
+	}
+
 	isPreexisting, isPreexistingSpecified := volumeConfig["isPreexisting"]
 	if isPreexistingSpecified && isPreexisting.(bool) == false {
 		uid, uidSpecified := volumeConfig["uid"]
@@ -255,17 +264,8 @@ func (s *nfsRemoteClient) mount(nfsShare, remoteMountpoint string) (string, erro
 		s.logger.Printf("nfsRemoteClient: - mount: %s is already mounted at %s\n", nfsShare, remoteMountpoint)
 		return remoteMountpoint, nil
 	}
-
-	s.logger.Printf("nfsRemoteClient: mkdir -p %s\n", remoteMountpoint)
-	args := []string{"mkdir", "-p", remoteMountpoint}
-
 	executor := utils.NewExecutor(s.logger)
-	_, err := executor.Execute("sudo", args)
-	if err != nil {
-		return "", fmt.Errorf("nfsRemoteClient: Failed to mkdir for remote mountpoint %s (share %s, error '%s')\n", remoteMountpoint, nfsShare, err.Error())
-	}
-
-	args = []string{"mount", "-t", "nfs", nfsShare, remoteMountpoint}
+	args := []string{"mount", "-t", "nfs", nfsShare, remoteMountpoint}
 	output, err := executor.Execute("sudo", args)
 	if err != nil {
 		return "", fmt.Errorf("nfsRemoteClient: Failed to mount share %s to remote mountpoint %s (error '%s', output '%s')\n", nfsShare, remoteMountpoint, err.Error(), output)
