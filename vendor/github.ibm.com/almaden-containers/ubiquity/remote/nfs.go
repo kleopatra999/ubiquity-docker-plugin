@@ -290,11 +290,9 @@ func (s *nfsRemoteClient) isMounted(nfsShare, remoteMountpoint string) bool {
 func (s *nfsRemoteClient) unmount(remoteMountpoint string) error {
 	s.logger.Printf("nfsRemoteClient: - unmount start remoteMountpoint=%s\n", remoteMountpoint)
 	defer s.logger.Printf("nfsRemoteClient: - unmount end remoteMountpoint=%s\n", remoteMountpoint)
-
-	command := "umount"
-	args := []string{remoteMountpoint}
-	cmd := exec.Command(command, args...)
-	output, err := cmd.Output()
+	executor := utils.NewExecutor(s.logger)
+	args := []string{"umount", remoteMountpoint}
+	output, err := executor.Execute("sudo", args)
 	if err != nil {
 		return fmt.Errorf("Failed to unmount remote mountpoint %s (error '%s', output '%s')\n", remoteMountpoint, err.Error(), output)
 	}
