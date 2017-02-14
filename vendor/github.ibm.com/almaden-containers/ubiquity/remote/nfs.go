@@ -156,7 +156,6 @@ func (s *nfsRemoteClient) Attach(name string) (string, error) {
 	// FIXME: What is our local mount path? Should we be getting this from the volume config? Using same path as on ubiquity server below /mnt/ for now.
 	remoteMountpoint := path.Join("/mnt/", strings.Split(nfsShare, ":")[1])
 
-	returnMountPoint, err := s.mount(nfsShare, remoteMountpoint)
 	_, volumeConfig, err := s.GetVolume(name)
 	if err != nil {
 		return "", err
@@ -168,7 +167,7 @@ func (s *nfsRemoteClient) Attach(name string) (string, error) {
 		gid, gidSpecified := volumeConfig["gid"]
 		executor := utils.NewExecutor(s.logger)
 		if uidSpecified || gidSpecified {
-			args := []string{"chown", fmt.Sprintf("%s:%s", uid, gid), returnMountPoint}
+			args := []string{"chown", fmt.Sprintf("%s:%s", uid, gid), remoteMountpoint}
 			_, err = executor.Execute("sudo", args)
 			if err != nil {
 				s.logger.Printf("Failed to change permissions of mountpoint %s: %s", mountResponse.Mountpoint, err.Error())
@@ -176,7 +175,7 @@ func (s *nfsRemoteClient) Attach(name string) (string, error) {
 			}
 		} else {
 			//chmod 777 mountpoint
-			args := []string{"chmod", "777", returnMountPoint}
+			args := []string{"chmod", "777", remoteMountpoint}
 			_, err = executor.Execute("sudo", args)
 			if err != nil {
 				s.logger.Printf("Failed to change permissions of mountpoint %s: %s", mountResponse.Mountpoint, err.Error())
@@ -184,8 +183,7 @@ func (s *nfsRemoteClient) Attach(name string) (string, error) {
 			}
 		}
 	}
-
-	return returnMountPoint, err
+	return s.mount(nfsShare, remoteMountpoint)
 }
 
 func (s *nfsRemoteClient) Detach(name string) error {
